@@ -359,6 +359,7 @@ class TTS(torch.nn.Module):
 class STT_LLM_TTS(torch.nn.Module):
     
     THRESHOLD_VOICE_DETECTION  = -30000
+    INSTRUCT_COMMAND="Instruct:"
     
     def __init__(self, device, tts_model):
         """Initialize STT, LLM and TTS model and the state of the voice assistant 
@@ -490,7 +491,7 @@ class STT_LLM_TTS(torch.nn.Module):
             print("\n\n ## Listening... ")
 
             # Add format token
-            self.call_LLM(input="\nInstruct:", reason="format", tokenize=True)
+            self.call_LLM(input=f"\n{self.INSTRUCT_COMMAND}", reason="format", tokenize=True)
 
         if (len(transcribed_text) == 0 or transcribed_text.startswith(" ")) and len(self.current_word)>0:
             # --> new word
@@ -542,6 +543,12 @@ class STT_LLM_TTS(torch.nn.Module):
         wav = None
         response = None
 
+        if len(self.response_sentence)>=10:
+            TEMP_response = self.llm.detokenize(self.response_sentence)
+            TEMP_response = "".join(TEMP_response)
+            if self.INSTRUCT_COMMAND in TEMP_response:
+                end_of_sequence = True        
+
         if end_of_sentence or len(self.response_sentence)>=50:
             # --> End of Sentence
             if time.time() - self.last_token_timestep > 0.3:
@@ -583,6 +590,9 @@ class STT_LLM_TTS(torch.nn.Module):
                 # detokenize current sentence 
                 response = self.llm.detokenize(self.response_sentence)
                 response = "".join(response)
+                
+                if self.INSTRUCT_COMMAND in response:
+                    response = response[:response.index(self.INSTRUCT_COMMAND)]                
 
                 # Sometimes the previous sentence was already the end of the sequence but the EOS
                 # token is generated after the end of sentence token. If the sequence ends but the current
